@@ -1,0 +1,10 @@
+stereo_avoidance_node:
+  ros__parameters:
+    model_path: "depth_policy.onnx"
+    depth_topic: "/stereo/depth"
+    odometry_topic: "/uav/odometry"
+    goal_topic: "/uav/goal"
+    command_topic: "/avoidance/setpoint"
+    body_frame_id: "base_link"
+    policy_hz: 15.0
+    stale_timeout_ms: 250

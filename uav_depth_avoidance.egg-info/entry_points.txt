@@ -1,0 +1,4 @@
+[console_scripts]
+uav-evaluate = uav_rl.evaluate:main
+uav-export-onnx = uav_rl.export_onnx:main
+uav-train = uav_rl.training:main

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uav-depth-avoidance"
+version = "0.1.0"
+description = "Depth-based quadrotor obstacle avoidance research scaffold"
+requires-python = ">=3.10"
+dependencies = [
+  "gymnasium>=1.0,<2.0",
+  "numpy>=1.26,<3.0",
+  "torch>=2.5",
+  "stable-baselines3>=2.4,<3.0",
+]
+
+[project.optional-dependencies]
+export = ["onnx>=1.16", "onnxscript>=0.2", "onnxruntime>=1.20"]
+test = ["pytest>=8.0"]
+
+[project.scripts]
+uav-train = "uav_rl.training:main"
+uav-evaluate = "uav_rl.evaluate:main"
+uav-export-onnx = "uav_rl.export_onnx:main"
+
+[tool.setuptools.packages.find]
+include = ["uav_rl*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

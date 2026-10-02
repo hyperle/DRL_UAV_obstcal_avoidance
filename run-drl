@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+ENTRY="$(readlink -f -- "$0")"
+exec "$(dirname -- "$ENTRY")/.script/run-drl" "$@"

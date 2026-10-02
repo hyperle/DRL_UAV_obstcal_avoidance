@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd -P)"
+ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
+DRL_VENV_VALUE="$(printenv DRL_VENV || true)"
+if [ -n "$DRL_VENV_VALUE" ]; then
+  VENV_DIR="$DRL_VENV_VALUE"
+else
+  VENV_DIR="$ROOT_DIR/.venv"
+fi
+
+usage() {
+  cat <<'EOF'
+Usage: run-drl [command] [options]
+
+Commands:
+  setup                         Create/reuse .venv and install project extras
+  test                          Run the environment tests
+  train [args]                  Train PPO (default: 1,000,000 steps, 8 envs)
+  evaluate MODEL [args]         Evaluate a saved PPO checkpoint
+  export MODEL [args]           Export a PPO actor to ONNX and verify it
+  all [train args]              Test, train, and export depth_policy.onnx
+  help                          Show this help
+
+Examples:
+  run-drl
+  run-drl train --timesteps 200000 --n-envs 8
+  run-drl evaluate artifacts/ppo_depth_avoidance.zip --episodes 100
+  run-drl export artifacts/ppo_depth_avoidance.zip
+  run-drl all --timesteps 200000
+
+Environment:
+  DRL_VENV=/path/to/venv      Override the virtual-environment location
+  DRL_SKIP_INSTALL=1          Do not install missing Python dependencies
+EOF
+}
+
+die() {
+  echo "run-drl: $*" >&2
+  exit 1
+}
+
+ensure_python() {
+  command -v python3 >/dev/null 2>&1 || die "python3 is required"
+  if [ ! -x "$VENV_DIR/bin/python" ]; then
+    echo "[run-drl] Creating virtual environment: $VENV_DIR"
+    python3 -m venv "$VENV_DIR" || die "failed to create $VENV_DIR; install python3-venv"
+  fi
+  PYTHON_BIN="$VENV_DIR/bin/python"
+  PIP_BIN="$VENV_DIR/bin/pip"
+}
+
+ensure_dependencies() {
+  ensure_python
+  if "$PYTHON_BIN" -c 'import gymnasium, torch, stable_baselines3' >/dev/null 2>&1; then
+    return
+  fi
+  DRL_SKIP_INSTALL_VALUE="$(printenv DRL_SKIP_INSTALL || true)"
+  [ "$DRL_SKIP_INSTALL_VALUE" = 1 ] && die "dependencies are missing (unset DRL_SKIP_INSTALL or run setup)"
+  echo "[run-drl] Installing Python dependencies"
+  "$PIP_BIN" install --upgrade pip
+  "$PIP_BIN" install -e "$ROOT_DIR[export,test]"
+}
+
+setup() {
+  ensure_python
+  echo "[run-drl] Installing project dependencies"
+  "$PIP_BIN" install --upgrade pip
+  "$PIP_BIN" install -e "$ROOT_DIR[export,test]"
+}
+
+run_test() {
+  ensure_dependencies
+  "$PYTHON_BIN" -m pytest "$ROOT_DIR/tests" -q
+}
+
+run_train() {
+  ensure_dependencies
+  "$PYTHON_BIN" -m uav_rl.training "$@"
+}
+
+run_evaluate() {
+  ensure_dependencies
+  [ $# -ge 1 ] || die "evaluate requires a PPO checkpoint path"
+  "$PYTHON_BIN" -m uav_rl.evaluate "$@"
+}
+
+run_export() {
+  ensure_dependencies
+  [ $# -ge 1 ] || die "export requires a PPO checkpoint path"
+  if ! "$PYTHON_BIN" -c 'import onnx, onnxruntime, onnxscript' >/dev/null 2>&1; then
+    DRL_SKIP_INSTALL_VALUE="$(printenv DRL_SKIP_INSTALL || true)"
+    [ "$DRL_SKIP_INSTALL_VALUE" = 1 ] && die "ONNX dependencies are missing"
+    "$PIP_BIN" install -e "$ROOT_DIR[export]"
+  fi
+  "$PYTHON_BIN" -m uav_rl.export_onnx "$@"
+}
+
+run_all() {
+  ensure_dependencies
+  run_test
+  run_train "$@"
+  checkpoint="$ROOT_DIR/artifacts/ppo_depth_avoidance.zip"
+  [ -f "$checkpoint" ] || die "training did not produce $checkpoint"
+  run_export "$checkpoint" --output "$ROOT_DIR/artifacts/depth_policy.onnx"
+}
+
+main() {
+  cd "$ROOT_DIR"
+  if [ $# -gt 0 ]; then
+    command="$1"
+    shift
+  else
+    command=train
+  fi
+  case "$command" in
+    setup) setup "$@" ;;
+    test) run_test "$@" ;;
+    train) run_train "$@" ;;
+    evaluate) run_evaluate "$@" ;;
+    export) run_export "$@" ;;
+    all) run_all "$@" ;;
+    help|-h|--help) usage ;;
+    *) usage >&2; die "unknown command: $command" ;;
+  esac
+}
+
+main "$@"

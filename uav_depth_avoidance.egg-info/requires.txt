@@ -1,0 +1,12 @@
+gymnasium<2.0,>=1.0
+numpy<3.0,>=1.26
+torch>=2.5
+stable-baselines3<3.0,>=2.4
+
+[export]
+onnx>=1.16
+onnxscript>=0.2
+onnxruntime>=1.20
+
+[test]
+pytest>=8.0
